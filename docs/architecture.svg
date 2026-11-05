@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900" font-family="Noto Sans CJK KR, Noto Sans, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="900" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="40" y="52" font-size="28" font-weight="700" fill="#0f172a">codysseyB3_1 · AWS 웹 서비스 아키텍처</text>
+  <text x="40" y="82" font-size="16" fill="#475569">Region: ap-northeast-2 (Seoul) · 모든 리소스 태그 Project=codyssey-b3-1</text>
+
+  <!-- Users -->
+  <g>
+    <rect x="40" y="200" width="200" height="110" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="140" y="240" text-anchor="middle" font-size="18" font-weight="700" fill="#1e3a8a">외부 사용자</text>
+    <text x="140" y="266" text-anchor="middle" font-size="14" fill="#1e40af">브라우저 / curl</text>
+    <text x="140" y="288" text-anchor="middle" font-size="13" fill="#64748b">any IP (0.0.0.0/0)</text>
+
+    <rect x="40" y="430" width="200" height="110" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+    <text x="140" y="470" text-anchor="middle" font-size="18" font-weight="700" fill="#14532d">관리자 (나)</text>
+    <text x="140" y="496" text-anchor="middle" font-size="14" fill="#166534">SSH + key pair</text>
+    <text x="140" y="518" text-anchor="middle" font-size="13" fill="#64748b">내 IP /32 만</text>
+  </g>
+
+  <!-- Internet cloud -->
+  <ellipse cx="370" cy="370" rx="80" ry="48" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <text x="370" y="377" text-anchor="middle" font-size="18" font-weight="700" fill="#334155">Internet</text>
+
+  <!-- AWS cloud boundary -->
+  <rect x="480" y="120" width="880" height="730" rx="18" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="10 6"/>
+  <text x="500" y="150" font-size="16" font-weight="700" fill="#b45309">AWS Cloud · Seoul (ap-northeast-2)</text>
+
+  <!-- IGW -->
+  <rect x="520" y="320" width="130" height="100" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="585" y="358" text-anchor="middle" font-size="16" font-weight="700" fill="#5b21b6">Internet</text>
+  <text x="585" y="380" text-anchor="middle" font-size="16" font-weight="700" fill="#5b21b6">Gateway</text>
+  <text x="585" y="404" text-anchor="middle" font-size="12" fill="#6b7280">b3-1-igw</text>
+
+  <!-- VPC -->
+  <rect x="690" y="170" width="640" height="650" rx="16" fill="#f8fafc" stroke="#0f766e" stroke-width="2.5"/>
+  <text x="712" y="202" font-size="18" font-weight="700" fill="#115e59">VPC  b3-1-vpc · 10.0.0.0/16</text>
+
+  <!-- Route table -->
+  <rect x="712" y="222" width="596" height="92" rx="10" fill="#ffffff" stroke="#64748b" stroke-width="1.5"/>
+  <text x="730" y="248" font-size="15" font-weight="700" fill="#334155">Route Table  b3-1-public-rt</text>
+  <text x="730" y="274" font-size="14" fill="#334155" font-family="monospace">10.0.0.0/16  →  local</text>
+  <text x="730" y="298" font-size="14" fill="#7c3aed" font-weight="700" font-family="monospace">0.0.0.0/0    →  igw (b3-1-igw)</text>
+  <text x="1290" y="298" text-anchor="end" font-size="12" fill="#64748b">public subnet에 명시적 연결</text>
+
+  <!-- Public subnet -->
+  <rect x="712" y="338" width="596" height="460" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="732" y="368" font-size="16" font-weight="700" fill="#065f46">Public Subnet  b3-1-public-subnet · 10.0.1.0/24</text>
+  <text x="732" y="390" font-size="13" fill="#047857">ap-northeast-2a · 퍼블릭 IPv4 자동 할당 ON</text>
+
+  <!-- Security group -->
+  <rect x="742" y="412" width="536" height="366" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="762" y="440" font-size="15" font-weight="700" fill="#9a3412">Security Group  b3-1-web-sg</text>
+  <text x="762" y="464" font-size="13" fill="#9a3412" font-family="monospace">IN  80/tcp  ← 0.0.0.0/0    (HTTP)</text>
+  <text x="762" y="484" font-size="13" fill="#9a3412" font-family="monospace">IN  22/tcp  ← 내IP/32      (SSH)</text>
+  <text x="762" y="504" font-size="13" fill="#9a3412" font-family="monospace">OUT all     → 0.0.0.0/0    (apt, curl)</text>
+
+  <!-- EC2 -->
+  <rect x="802" y="528" width="416" height="226" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2.5"/>
+  <text x="1010" y="562" text-anchor="middle" font-size="19" font-weight="700" fill="#7c2d12">EC2  b3-1-web</text>
+  <text x="1010" y="588" text-anchor="middle" font-size="14" fill="#475569">t3.micro · Ubuntu 24.04 LTS · EBS gp3 8GiB</text>
+  <text x="1010" y="610" text-anchor="middle" font-size="14" fill="#475569">Private 10.0.1.x · Public IP x.x.x.x</text>
+  <rect x="842" y="630" width="336" height="100" rx="10" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.5"/>
+  <text x="1010" y="660" text-anchor="middle" font-size="16" font-weight="700" fill="#075985">Nginx :80</text>
+  <text x="1010" y="684" text-anchor="middle" font-size="13" fill="#0369a1" font-family="monospace">GET /        → Hello Cloud 페이지</text>
+  <text x="1010" y="706" text-anchor="middle" font-size="13" fill="#0369a1" font-family="monospace">GET /health  → 200 "OK"</text>
+
+  <!-- IAM -->
+  <rect x="40" y="640" width="400" height="180" rx="14" fill="#fefce8" stroke="#ca8a04" stroke-width="2"/>
+  <text x="60" y="672" font-size="17" font-weight="700" fill="#713f12">IAM  (콘솔 접근 권한 · 리전 전역)</text>
+  <text x="60" y="700" font-size="14" fill="#713f12">사용자 codyssey-b3-1 (루트 사용 X)</text>
+  <text x="60" y="724" font-size="14" fill="#713f12">정책: EC2·VPC·SG 액션만, ap-northeast-2 한정</text>
+  <text x="60" y="748" font-size="14" fill="#713f12">RunInstances는 t2/t3.micro만 허용</text>
+  <text x="60" y="772" font-size="14" fill="#713f12">S3·RDS·IAM 등 무관 서비스 / AdministratorAccess ✗</text>
+  <text x="60" y="802" font-size="12" fill="#a16207">SG = 패킷(누가 들어오나) · IAM = API(누가 만들고 지우나)</text>
+
+  <!-- flows: HTTP (blue) -->
+  <path d="M240,255 C300,255 320,320 330,330" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arr)"/>
+  <path d="M450,360 L518,360" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arr)"/>
+  <path d="M650,360 C680,360 690,470 740,470 L800,600" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arr)"/>
+
+  <!-- SSH (green) -->
+  <path d="M240,485 C300,485 330,430 345,414" fill="none" stroke="#16a34a" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#arrG)"/>
+  <path d="M450,385 L518,385" fill="none" stroke="#16a34a" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#arrG)"/>
+  <path d="M650,395 C690,395 700,560 800,680" fill="none" stroke="#16a34a" stroke-width="3" stroke-dasharray="7 5" marker-end="url(#arrG)"/>
+
+  <!-- Outbound (orange) -->
+  <path d="M802,735 C690,735 600,640 600,424" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="3 4" marker-end="url(#arrO)" opacity="0.8"/>
+
+  <!-- legend -->
+  <rect x="40" y="96" width="0" height="0"/>
+  <g transform="translate(40,580)">
+    <line x1="0" y1="0" x2="36" y2="0" stroke="#2563eb" stroke-width="3"/>
+    <text x="44" y="5" font-size="13" fill="#334155">HTTP 80 (외부 → 웹)</text>
+    <line x1="0" y1="22" x2="36" y2="22" stroke="#16a34a" stroke-width="3" stroke-dasharray="7 5"/>
+    <text x="44" y="27" font-size="13" fill="#334155">SSH 22 (내 IP만)</text>
+    <line x1="210" y1="0" x2="246" y2="0" stroke="#ea580c" stroke-width="2" stroke-dasharray="3 4"/>
+    <text x="254" y="5" font-size="13" fill="#334155">아웃바운드</text>
+    <text x="254" y="20" font-size="13" fill="#334155">(apt / curl example.com)</text>
+  </g>
+
+  <!-- flow caption -->
+  <text x="700" y="882" font-size="14" fill="#1e40af">요청 흐름: 사용자 → Internet → IGW → Route Table(0.0.0.0/0) → Public Subnet → SG(80 허용) → EC2 → Nginx</text>
+</svg>
