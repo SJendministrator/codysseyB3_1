@@ -70,7 +70,7 @@
   <!-- EC2 -->
   <rect x="802" y="528" width="416" height="226" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2.5"/>
   <text x="1010" y="562" text-anchor="middle" font-size="19" font-weight="700" fill="#7c2d12">EC2  b3-1-web</text>
-  <text x="1010" y="588" text-anchor="middle" font-size="14" fill="#475569">t3.micro · Ubuntu 24.04 LTS · EBS gp3 8GiB</text>
+  <text x="1010" y="588" text-anchor="middle" font-size="14" fill="#475569">t3.micro · Ubuntu 26.04 LTS · EBS gp3 8GiB</text>
   <text x="1010" y="610" text-anchor="middle" font-size="14" fill="#475569">Private 10.0.1.x · Public IP x.x.x.x</text>
   <rect x="842" y="630" width="336" height="100" rx="10" fill="#f0f9ff" stroke="#0284c7" stroke-width="1.5"/>
   <text x="1010" y="660" text-anchor="middle" font-size="16" font-weight="700" fill="#075985">Nginx :80</text>

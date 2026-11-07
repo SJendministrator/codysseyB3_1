@@ -24,7 +24,7 @@ AWS 서울 리전(`ap-northeast-2`)에 **격리된 VPC → Public Subnet → EC2
 | Internet Gateway | `b3-1-igw` | `b3-1-vpc`에 연결 |
 | Route Table | `b3-1-public-rt` | `10.0.0.0/16 → local`, **`0.0.0.0/0 → b3-1-igw`**, 서브넷 명시적 연결 |
 | Security Group | `b3-1-web-sg` | IN `80 ← 0.0.0.0/0`, IN `22 ← 내 IP/32`, OUT all |
-| EC2 | `b3-1-web` | `t3.micro`, Ubuntu 24.04 LTS, gp3 8GiB, user-data로 Nginx 자동 설치 |
+| EC2 | `b3-1-web` | `t3.micro`, Ubuntu 26.04 LTS, gp3 8GiB, user-data로 Nginx 자동 설치 |
 | IAM | `codyssey-b3-1` | [`iam/codyssey-b3-1-least-privilege.json`](iam/codyssey-b3-1-least-privilege.json) 1개만 연결 |
 
 ## 트래픽 흐름
@@ -69,31 +69,52 @@ AWS 서울 리전(`ap-northeast-2`)에 **격리된 VPC → Public Subnet → EC2
 ```bash
 $ curl -i http://<퍼블릭IP>/health
 HTTP/1.1 200 OK
-Server: nginx/1.24.0 (Ubuntu)
+Server: nginx/1.28.3 (Ubuntu)
 Content-Type: text/plain
 ...
 OK
 ```
 
-| 검증 | 스크린샷 |
-|---|---|
-| 외부 `/health` 호출 (맥 터미널) | `screenshots/01-external-health.png` |
-| 외부 브라우저 접속 | `screenshots/02-external-browser.png` |
-| 인스턴스 내부 검증 (`verify-instance.sh`: nginx active, localhost 200, example.com 200) | `screenshots/03-instance-verify.png` |
-| Security Group 인바운드 규칙 | `screenshots/04-sg-inbound.png` |
-| Route Table 라우팅 | `screenshots/05-route-table.png` |
-| IAM 사용자 권한 | `screenshots/06-iam-policy.png` |
+## 실습 과정 (스크린샷)
+
+### 1단계 · 네트워크 구성
+
+| 단계 | 무엇을 했나 | 확인 포인트 | 화면 |
+|---|---|---|---|
+| ① VPC 생성 | "VPC만" 선택, `b3-1-vpc` / `10.0.0.0/16` | 서비스 전용 격리 네트워크 | <img src="screenshots/01-vpc-create.png" width="360"> |
+| ② VPC 확인 | 생성된 VPC 세부 정보 | `Available`, 기본 VPC 아님. *Route 53 Resolver "규칙 그룹 로드 실패"* = 정책에 Route 53 권한이 없어서 뜨는 것 → **최소권한이 적용된 증거** | <img src="screenshots/02-vpc.png" width="360"> |
+| ③ Public Subnet | `b3-1-public-subnet` / `10.0.1.0/24` / `ap-northeast-2a` | VPC 안의 /24 대역, 가용 IP 251개(AWS 예약 5개 제외) | <img src="screenshots/03-subnet.png" width="360"> |
+| ④ 라우팅 | `b3-1-public-rt`에 `0.0.0.0/0 → igw` 추가 | `local` + `igw` 두 줄 모두 **활성** → 이게 있어야 "퍼블릭" 서브넷 | <img src="screenshots/04-route-table-routes.png" width="360"> |
+| ⑤ 서브넷 연결 | 라우팅 테이블 ↔ 서브넷 명시적 연결 | 연결 안 하면 IGW 경로가 없는 기본 테이블을 따라감 | <img src="screenshots/05-route-table-subnet.png" width="360"> |
+
+### 2단계 · 보안
+
+| 단계 | 무엇을 했나 | 확인 포인트 | 화면 |
+|---|---|---|---|
+| ⑥ Security Group | `b3-1-web-sg` 인바운드 2개만 | HTTP 80 ← `0.0.0.0/0`, SSH 22 ← **내 IP `/32`**, 전체 포트 오픈 없음 | <img src="screenshots/06-security-group.png" width="360"> |
+| ⑦ IAM 사용자 | `codyssey-b3-1` 생성, 최소권한 정책 1개만 연결 | 루트 대신 이 사용자로 이후 모든 작업 (암호는 마스킹) | <img src="screenshots/07-iam-user.png" width="360"> |
+
+### 3단계 · 서버 & 검증
+
+| 단계 | 무엇을 했나 | 확인 포인트 | 화면 |
+|---|---|---|---|
+| ⑧ SSH 접속 | `ssh -i b3-1-key.pem ubuntu@54.180.132.172` | 내 IP에서 접속 성공, 프라이빗 IP `10.0.1.21` (서브넷 대역 안) | <img src="screenshots/08-ssh.png" width="360"> |
+| ⑨ 인스턴스 내부 검증 | nginx 상태 / localhost / health / 아웃바운드 | `active` · `HTTP 200` · `OK` · example.com `HTTP 200` (IGW 경유 아웃바운드 OK) | <img src="screenshots/09-instance-verify.png" width="360"> |
+| ⑩ 외부 `/health` **(제출 방식 B)** | 맥에서 `curl -i http://54.180.132.172/health` | `HTTP/1.1 200 OK` + `OK` | <img src="screenshots/10-external-health.png" width="360"> |
+| ⑪ 외부 브라우저 (참고 A) | `http://54.180.132.172` | Hello Cloud 페이지 표시 | <img src="screenshots/11-external-browser.png" width="360"> |
+
+> 이미지를 클릭하면 원본 크기로 볼 수 있다.
 
 ## 기능 요구사항 체크
 
-- [ ] VPC 1개 / Public Subnet 1개 / IGW 연결
-- [ ] Route Table `0.0.0.0/0 → IGW`
-- [ ] 인스턴스에서 `curl https://example.com` 성공 (아웃바운드)
-- [ ] SSH 접속 성공
-- [ ] Nginx 실행 중, `curl http://localhost` → 200
-- [ ] SG: 80은 0.0.0.0/0, 22는 내 IP만, 전체 포트 오픈 규칙 없음
-- [ ] IAM 최소권한 사용자로 작업, AdministratorAccess 미사용
-- [ ] 외부 `/health` → 200 OK
+- [x] VPC 1개 / Public Subnet 1개 / IGW 연결 — ①~⑤
+- [x] Route Table `0.0.0.0/0 → IGW` — ④
+- [x] 인스턴스에서 `curl https://example.com` 성공 (아웃바운드) — ⑨
+- [x] SSH 접속 성공 — ⑧
+- [x] Nginx 실행 중, `curl http://localhost` → 200 — ⑨
+- [x] SG: 80은 0.0.0.0/0, 22는 내 IP만, 전체 포트 오픈 규칙 없음 — ⑥
+- [x] IAM 최소권한 사용자로 작업, AdministratorAccess 미사용 — ⑦
+- [x] 외부 `/health` → 200 OK — ⑩
 - [ ] 리소스 정리 완료 (EC2, EBS, EIP, IGW, VPC)
 
 ## 디렉터리
