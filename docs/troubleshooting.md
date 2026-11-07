@@ -1,11 +1,12 @@
 # 트러블슈팅 보고서
 
-> 실습 중 **실제로 겪은 오류**를 우선 기록한다. 겪은 게 없으면 아래 "의도적 재현" 방식으로 직접 장애를 만들고 → 원인 찾고 → 고친다.
-> `[ ]` 로 표시된 곳은 실제 실행 결과·로그로 채운다.
+- 일시: 2026-11-07 (KST)
+- 대상: EC2 `b3-1-web` (퍼블릭 IP `54.180.132.172`, 프라이빗 IP `10.0.1.21`)
+- 방식: 정상 동작을 확인한 뒤, **라우팅 테이블에서 IGW 경로를 지워 장애를 일부러 재현**했다. 그다음 증상을 보고 원인을 좁혀 가며 복구했다.
 
 ## 진단 원칙: 바깥에서 안쪽으로
 
-외부 요청이 Nginx까지 가는 경로를 한 칸씩 의심한다.
+외부 요청이 Nginx까지 가는 경로를 앞에서부터 한 칸씩 의심한다.
 
 ```
 내 PC → 인터넷 → IGW → Route Table → Subnet → Security Group → EC2(OS) → Nginx(:80)
@@ -13,54 +14,37 @@
 
 | 증상 | 의심 구간 | 빠른 확인 |
 |---|---|---|
-| `curl` **timeout** (응답 자체가 없음) | 라우팅 / SG / 퍼블릭 IP | SG 인바운드, 라우트 `0.0.0.0/0 → igw`, 인스턴스에 퍼블릭 IP 있는지 |
-| `Connection refused` (즉시 거절) | 패킷은 도착, 80에서 듣는 프로세스 없음 | `systemctl status nginx`, `ss -tlnp` |
-| `404` / `502` | 네트워크 정상, 웹 서버 설정 문제 | `nginx -t`, `/var/log/nginx/error.log` |
-| SSH만 안 됨, HTTP는 됨 | SG 22번 소스 IP | 내 현재 IP(`curl ifconfig.me`) vs SG 소스 |
+| `curl` **timeout** (응답 자체가 없음) | 라우팅 / SG / 퍼블릭 IP | 라우트 `0.0.0.0/0 → igw`, SG 인바운드, 인스턴스 퍼블릭 IP |
+| `Connection refused` (즉시 거절) | 패킷은 도착했는데 80에서 듣는 프로세스가 없음 | `systemctl status nginx`, `ss -tlnp` |
+| `404` / `502` | 네트워크는 정상, 웹 서버 설정 문제 | `nginx -t`, `/var/log/nginx/error.log` |
+| SSH만 안 되고 HTTP는 됨 | SG 22번 소스 IP | 내 현재 IP(`curl ifconfig.me`)와 SG 소스 비교 |
 
-> **timeout vs refused 구분이 핵심.** SG는 막을 때 응답 없이 버리므로(drop) timeout, OS까지 왔는데 포트가 닫혀 있으면 RST가 와서 refused.
-
----
-
-## 사례 1. 외부에서 웹 접속 timeout — 라우팅 테이블에 IGW 경로 누락
-
-| 항목 | 내용 |
-|---|---|
-| **증상** | 맥에서 `curl http://<퍼블릭IP>/health` 가 응답 없이 timeout. 인스턴스 안에서 `curl https://example.com` 도 timeout. SSH도 접속 불가. |
-| **원인 가설** | ① SG가 80을 막고 있다 ② 서브넷이 IGW로 가는 경로가 없다 ③ Nginx가 죽었다 → SSH까지 같이 죽었고 **아웃바운드도 안 됨** = 인스턴스 하나가 아니라 서브넷 전체의 인터넷 출입이 끊김 → ②가 가장 유력 |
-| **검증 방법** | 1) SG 인바운드 확인: 80(0.0.0.0/0), 22(내 IP) 정상 → ① 기각<br>2) VPC → 라우팅 테이블 → 서브넷에 연결된 테이블의 라우팅 탭 확인: `10.0.0.0/16 local` 한 줄만 있고 `0.0.0.0/0` 없음 → ② 확인<br>3) (SSH 불가하므로) EC2 → 작업 → 모니터링 → **시스템 로그 가져오기**로 user-data 실행 결과 확인: `[ ]` |
-| **조치 내용** | 라우팅 편집 → `0.0.0.0/0 → igw-xxxx` 추가 |
-| **결과** | `curl -i http://<퍼블릭IP>/health` → `HTTP/1.1 200 OK` / `OK`. SSH 접속 성공. `[스크린샷: screenshots/ts-01-after.png]` |
-| **재발 방지** | 배포 전 체크리스트에 "퍼블릭 서브넷 라우팅 테이블에 `0.0.0.0/0 → igw` 존재 + 서브넷 명시적 연결" 추가. VPC를 "VPC만"으로 만들면 라우트가 자동으로 안 생긴다는 점을 README에 기록. |
-
-**재현 방법 (의도적으로 만들기)**: 정상 동작 확인 후 → 라우팅 테이블에서 `0.0.0.0/0` 경로 삭제 → 맥에서 `curl --max-time 5 http://<IP>/health` → timeout 확인 `[스크린샷: ts-01-before.png]` → 경로 다시 추가 → 정상 확인
+> **timeout과 refused를 구분하는 게 핵심이다.** SG나 라우팅에서 막히면 아무 응답 없이 패킷이 사라져서 timeout이 난다. 반대로 OS까지 도착했는데 포트가 닫혀 있으면 RST가 돌아와서 즉시 refused가 뜬다.
 
 ---
 
-## 사례 2. (선택) Connection refused — Nginx 중지
+## 사례 1. 외부 접속 timeout: 라우팅 테이블에 IGW 경로 누락
 
 | 항목 | 내용 |
 |---|---|
-| **증상** | 외부 `curl http://<IP>/health` → `curl: (7) Failed to connect ... Connection refused` (timeout이 아니라 즉시 실패) |
-| **원인 가설** | 즉시 거절 = 패킷이 SG·라우팅을 통과해 OS까지 왔다 → 네트워크 문제 아님. 80 포트를 듣는 프로세스가 없다. |
-| **검증 방법** | SSH 접속 → `systemctl is-active nginx` → `[ ]`<br>`sudo ss -tlnp \| grep :80` → `[ ]` (출력 없음)<br>`sudo journalctl -u nginx -n 20` → `[ ]` |
-| **조치 내용** | `sudo systemctl start nginx` (원인이 설정 오류라면 `sudo nginx -t` 로 문법 오류 위치 확인 후 수정) |
-| **결과** | `[ ]` |
-| **재발 방지** | `systemctl enable nginx` 로 재부팅 시 자동 기동 보장. 설정 변경 후엔 반드시 `nginx -t` → `reload` 순서. |
+| **증상** | 맥에서 `curl --max-time 5 http://54.180.132.172/health`를 실행하면 `curl: (28) Connection timed out after 5006 milliseconds`가 뜬다. 직전까지는 `200 OK`가 나오던 요청이다. |
+| **원인 가설** | 거절(refused)이 아니라 **timeout**이므로 패킷이 서버까지 가지 못했거나 응답이 돌아오지 못한 것이다. 그래서 Nginx나 OS보다 **네트워크 계층**을 먼저 의심했다.<br>① SG가 80을 막고 있다<br>② 서브넷에 인터넷(IGW)으로 가는 경로가 없다<br>③ 퍼블릭 IP가 바뀌었거나 없어졌다 |
+| **검증 방법** | ① SG `b3-1-web-sg` 인바운드 확인: HTTP 80 ← `0.0.0.0/0` 그대로 → **기각**<br>③ EC2 콘솔 확인: 퍼블릭 IP `54.180.132.172` 그대로 → **기각**<br>② VPC → 라우팅 테이블 `b3-1-public-rt` → 라우팅 탭: `10.0.0.0/16 → local` **한 줄만** 있고 `0.0.0.0/0 → igw` 경로가 없음 → **원인 확정** |
+| **조치 내용** | 라우팅 편집 → 라우팅 추가 → `0.0.0.0/0` → 대상 `인터넷 게이트웨이` → `igw-0f942cf3a974bbf37` → 변경 사항 저장 |
+| **결과** | 같은 명령을 다시 실행하니 `OK`가 돌아왔다. 외부 접속이 정상으로 복구됐다. |
+| **재발 방지** | ① 배포 체크리스트에 "퍼블릭 서브넷 라우팅 테이블에 `0.0.0.0/0 → igw` 존재 + 서브넷 명시적 연결 확인" 항목 추가<br>② "VPC만"으로 만들면 IGW 경로가 자동으로 생기지 않는다는 점을 README에 기록<br>③ 외부 접속 장애가 나면 timeout인지 refused인지부터 확인해서 네트워크 문제와 서버 문제를 먼저 가른다 |
 
-**재현 방법**: `sudo systemctl stop nginx` → 외부에서 curl → refused 확인 → start
+### 증빙
 
----
-
-## 사례 3. (실제 발생 시 기록) `[ ]`
-
-| 항목 | 내용 |
+| 단계 | 화면 |
 |---|---|
-| **증상** | |
-| **원인 가설** | |
-| **검증 방법** | |
-| **조치 내용** | |
-| **결과** | |
-| **재발 방지** | |
+| 1. 정상 상태: `local` + `0.0.0.0/0 → igw` 두 줄 | <img src="../screenshots/ts-01-route-before.png" width="520"> |
+| 2. 장애 재현: `0.0.0.0/0` 경로 제거 → `local`만 남음 | <img src="../screenshots/ts-02-route-removed.png" width="520"> |
+| 3. 증상: 외부 curl이 5초 만에 timeout | <img src="../screenshots/ts-03-timeout.png" width="520"> |
+| 4. 복구: 경로 재추가 후 같은 명령에 `OK` | <img src="../screenshots/ts-04-recovered.png" width="520"> |
 
-<!-- 실제로 잘 터지는 것들: SSH timeout(와이파이 바뀌어 내 IP 변경), "UnauthorizedOperation"(최소권한 정책에 없는 액션 — 에러 메시지의 Action 이름을 보고 정책에 추가), 퍼블릭 IP 미할당(서브넷 자동 할당 off), 브라우저가 https로 자동 전환 -->
+### 배운 점
+
+- 같은 VPC 안이라도 **라우팅 테이블 한 줄**이 사라지면 서버는 멀쩡히 돌아가는데 외부와는 완전히 끊긴다. 서버(Nginx)를 아무리 봐도 원인은 찾을 수 없다.
+- IGW가 VPC에 붙어 있는 것만으로는 부족하다. 서브넷 라우팅 테이블이 IGW를 **가리켜야** 퍼블릭 서브넷이 된다. "퍼블릭 서브넷"은 따로 존재하는 설정이 아니라, *IGW로 가는 경로가 있는 서브넷*을 부르는 이름이다.
+- SG는 라우팅이 살아 있다는 전제에서 동작하는 필터다. 경로가 없으면 SG 규칙이 맞아도 소용없다.
