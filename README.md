@@ -62,7 +62,7 @@ AWS 서울 리전(`ap-northeast-2`)에 **격리된 VPC → Public Subnet → EC2
 
 **선택 방식: (B) `GET http://<퍼블릭IP>/health`** (+ 참고로 (A) 브라우저 메인 페이지도 함께 확인)
 
-- 접속 정보: `http://54.180.132.172/health` (브라우저: `http://54.180.132.172`) (리소스 정리 후에는 접속 불가)
+- 접속 정보: `http://54.180.132.172/health` (브라우저: `http://54.180.132.172`) — 2026-11-07 실습 후 리소스를 삭제해서 현재는 접속 불가
 - 기대 응답: `HTTP/1.1 200 OK` / 본문 `OK`
 - `/health`는 Nginx 설정에서 `return 200 "OK\n";` 로 고정 응답 ([`scripts/user-data.sh`](scripts/user-data.sh))
 
@@ -115,7 +115,7 @@ OK
 - [x] SG: 80은 0.0.0.0/0, 22는 내 IP만, 전체 포트 오픈 규칙 없음 — ⑥
 - [x] IAM 최소권한 사용자로 작업, AdministratorAccess 미사용 — ⑦
 - [x] 외부 `/health` → 200 OK — ⑩
-- [ ] 리소스 정리 완료 (EC2, EBS, EIP, IGW, VPC)
+- [x] 리소스 정리 완료 (EC2, EBS, EIP, IGW, VPC) — [cleanup-checklist.md](docs/cleanup-checklist.md)
 
 ## 디렉터리
 
